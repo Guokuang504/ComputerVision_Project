@@ -1,0 +1,9 @@
+numpy
+opencv-python
+Pillow
+scipy
+scikit-image
+scikit-learn
+joblib
+openpyxl
+PyMuPDF

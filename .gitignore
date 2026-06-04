@@ -1,0 +1,63 @@
+# macOS / editor files
+.DS_Store
+._*
+.vscode/
+.idea/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Generated outputs
+debug/
+output/
+*_RESULTS/
+*.log
+
+# Human annotations and generated review queues.
+# Keep templates tracked, but do not commit filled labels by default.
+annotations/*.csv
+annotations/review_samples/
+
+# Large/raw local datasets. Keep them locally or provide them separately.
+FORM1/
+FORM2/
+FORM3/
+SIGNATURES/
+data/
+dataset/
+datasets/
+samples/
+
+# Optional generated models
+*.joblib
+
+# Generated Excel files outside ignored result/data folders
+EXAM_FORM*.xlsx
+*_PRESENCES.xlsx
+
+# Keep source, docs, and configuration tracked.
+!.gitignore
+!README.md
+!requirements.txt
+!requirements_project.txt
+!docs/
+!docs/**
+!code_partie1_stucture_generale/
+!code_partie1_stucture_generale/**
+!code_partie2_elements_graphiques/
+!code_partie2_elements_graphiques/**
+!recognition/
+!recognition/**
+!scripts/
+!scripts/**
+!annotations/
+!annotations/templates/
+!annotations/templates/*.csv
