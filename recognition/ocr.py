@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import csv
 import io
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -55,11 +56,25 @@ class PrintedTextRecognizer:
     def __init__(self, language: str = "eng", min_confidence: float = 0.30) -> None:
         self.language = language
         self.min_confidence = min_confidence
-        self.tesseract_path = shutil.which("tesseract")
+        self.tesseract_path = self._find_tesseract()
 
     @property
     def has_backend(self) -> bool:
         return self.tesseract_path is not None
+
+    @staticmethod
+    def _find_tesseract() -> Optional[str]:
+        """Find Tesseract even when Windows has not refreshed PATH yet."""
+        path = shutil.which("tesseract")
+        if path:
+            return path
+        for candidate in (
+            Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),
+            Path(r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"),
+        ):
+            if candidate.exists():
+                return str(candidate)
+        return None
 
     def predict(self, image: ImageInput, whitelist: Optional[str] = None, psm: int = 7) -> OCRPrediction:
         try:
@@ -94,7 +109,10 @@ class PrintedTextRecognizer:
     def _predict_tesseract(self, gray: np.ndarray, whitelist: Optional[str], psm: int) -> OCRPrediction:
         with tempfile.TemporaryDirectory() as tmp:
             img_path = Path(tmp) / "ocr.png"
-            cv2.imwrite(str(img_path), gray)
+            ok, encoded = cv2.imencode(".png", gray)
+            if not ok:
+                return OCRPrediction("", 0.0, "tesseract", "failed")
+            encoded.tofile(str(img_path))
             cmd = [
                 self.tesseract_path or "tesseract",
                 str(img_path),
@@ -148,6 +166,29 @@ class PrintedTextRecognizer:
         cleaned = text.strip()
         if field_type in {"code", "student_id", "module", "number", "unit"}:
             cleaned = cleaned.replace(" ", "")
+        if field_type == "module":
+            normalized = cleaned.upper().replace("|", "I").replace("L", "I")
+            match = re.search(r"[I1]G[.\-]?\d{4}", normalized)
+            if match:
+                value = match.group(0).replace("1G", "IG").replace("-", ".")
+                if "." not in value:
+                    value = value[:2] + "." + value[2:]
+                return value
+        if field_type == "date":
+            match = re.search(r"\d{1,2}/\d{1,2}/\d{4}", cleaned)
+            if match:
+                return match.group(0)
+        if field_type == "code":
+            normalized = cleaned.upper().replace(" ", "")
+            match = re.search(r"[S5328]\d-\d{2}-G\d", normalized)
+            if match:
+                value = match.group(0)
+                if value[0] != "S":
+                    value = "S" + value[1:]
+                return value
+            return normalized
+        if field_type == "name":
+            cleaned = re.sub(r"[^A-Za-zÀ-ÿ-]", "", cleaned).upper()
         if field_type == "number":
             cleaned = cleaned.replace(",", ".")
             if "." in cleaned:

@@ -15,7 +15,7 @@ def load_gray(image: ImageInput) -> np.ndarray:
     if image is None:
         raise ValueError("Cannot read image: input is None")
     if isinstance(image, (str, Path)):
-        arr = cv2.imread(str(image), cv2.IMREAD_GRAYSCALE)
+        arr = _imread_unicode(image)
         if arr is None:
             raise ValueError(f"Cannot read image: {image}")
         return _sanitize_gray(arr)
@@ -109,3 +109,20 @@ def _sanitize_gray(arr: np.ndarray) -> np.ndarray:
         raise ValueError("Cannot read image: grayscale array is empty")
     arr = np.nan_to_num(arr, nan=255.0, posinf=255.0, neginf=0.0)
     return np.clip(arr, 0, 255).astype(np.uint8)
+
+
+def _imread_unicode(path: str | Path) -> np.ndarray | None:
+    """Read an image from a path that may contain non-ASCII characters.
+
+    OpenCV's `imread` can fail on Windows paths containing characters such as
+    Chinese usernames.  Reading bytes with numpy and decoding them keeps the
+    recognition pipeline independent from the current filesystem encoding.
+    """
+
+    try:
+        data = np.fromfile(str(path), dtype=np.uint8)
+    except OSError:
+        return None
+    if data.size == 0:
+        return None
+    return cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)

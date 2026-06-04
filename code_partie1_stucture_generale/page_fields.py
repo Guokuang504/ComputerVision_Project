@@ -9,17 +9,17 @@ from PIL import Image
 # PAGE-01 ROI definitions (pixel coords for ~2482x3510 images)
 # ---------------------------------------------------------------------------
 
-HEADER_Y = (322, 372)
-MODULE_X = (370, 680)
-PROFESSOR_X = (920, 1220)
-DATE_X = (1440, 1760)
-CODE_X = (2050, 2470)
+HEADER_Y = (330, 420)
+MODULE_X = (330, 700)
+PROFESSOR_X = (900, 1180)
+DATE_X = (1500, 1820)
+CODE_X = (1980, 2445)
 
-FIRSTNAME_ROI = (35, 555, 1050, 620)
-LASTNAME_ROI = (35, 700, 1050, 765)
+FIRSTNAME_ROI = (160, 615, 1200, 710)
+LASTNAME_ROI = (160, 775, 1200, 870)
 
-NOTE_MAX_ROI = (1280, 2485, 1560, 2575)
-NOTE_VALID_ROI = (1280, 2615, 1560, 2705)
+NOTE_MAX_ROI = (1350, 2420, 1540, 2540)
+NOTE_VALID_ROI = (1350, 2590, 1540, 2700)
 
 # ---------------------------------------------------------------------------
 # Numeric answer box size thresholds

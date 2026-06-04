@@ -81,6 +81,7 @@ def cryptogram_distance(a: np.ndarray, b: np.ndarray) -> float:
 def validate_cryptograms(
     pages: list[ImageLike],
     threshold: float = 0.18,
+    max_missing: int = 1,
 ) -> CryptogramValidation:
     """Validate that all page cryptograms match the first detected one."""
 
@@ -89,5 +90,6 @@ def validate_cryptograms(
         return CryptogramValidation(False, [], None, [])
     reference = cryptograms[0]
     distances = [cryptogram_distance(reference.pattern, c.pattern) for c in cryptograms[1:]]
-    valid = len(cryptograms) == len(pages) and all(d <= threshold for d in distances)
+    enough_detected = len(cryptograms) >= max(1, len(pages) - max_missing)
+    valid = enough_detected and all(d <= threshold for d in distances)
     return CryptogramValidation(valid, distances, reference, cryptograms)

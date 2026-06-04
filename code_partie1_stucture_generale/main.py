@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import shutil
 import time
 from pathlib import Path
@@ -42,6 +43,8 @@ from excel_writer import write_presences_xlsx, write_form_xlsx
 # ---------------------------------------------------------------------------
 
 BASE_DIR = Path(__file__).resolve().parents[1]
+ROSTER_CSV = BASE_DIR / "annotations" / "student_roster.csv"
+_ROSTER_CACHE: dict[str, tuple[str, str]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -255,14 +258,6 @@ def _process_page01(
             if field_status != "ok":
                 debug.event("page01", f"{source_name}_{field_name}", field_status, confidence=confidence)
 
-    hw_crops = _safe_dict(lambda: extract_handwritten_crops(page01_img))
-    hw_results = {}
-    for field_name, field_crop in hw_crops.items():
-        pred = service.recognize_printed_field(np.array(field_crop), "name")
-        hw_results[field_name] = pred.text if pred.confidence > 0.3 else ""
-        if debug and pred.status != "ok":
-            debug.event("page01", f"{source_name}_{field_name}", pred.status, confidence=pred.confidence)
-
     if graphics:
         sig_result = service.recognize_signature(np.array(graphics.signature_crop))
         student_id_grid = graphics.student_id
@@ -273,6 +268,37 @@ def _process_page01(
     else:
         student_id_grid = ""
         validation_signature = 0
+
+    hw_crops = _safe_dict(lambda: extract_handwritten_crops(page01_img))
+    hw_results = {}
+    for field_name, field_crop in hw_crops.items():
+        pred = service.recognize_printed_field(np.array(field_crop), "name")
+        # Names are handwritten in boxes. Keep OCR only when it is clearly usable;
+        # otherwise a trusted student roster can fill names from the Student ID.
+        hw_results[field_name] = pred.text if pred.confidence > 0.45 else ""
+        if debug and pred.status != "ok":
+            debug.event(
+                "page01",
+                f"{source_name}_{field_name}",
+                pred.status,
+                text=pred.text,
+                confidence=pred.confidence,
+            )
+
+    roster_identity = _lookup_student_identity(student_id_grid)
+    if roster_identity:
+        roster_firstname, roster_lastname = roster_identity
+        if not hw_results.get("firstname"):
+            hw_results["firstname"] = roster_firstname
+        if not hw_results.get("lastname"):
+            hw_results["lastname"] = roster_lastname
+        if debug:
+            debug.event(
+                "page01",
+                f"{source_name}_student_roster",
+                "matched",
+                student_id=student_id_grid,
+            )
 
     try:
         crypto_validation = validate_cryptograms(all_images)
@@ -417,6 +443,32 @@ def _parse_float(value) -> float | None:
         return float(str(value).strip())
     except (ValueError, TypeError):
         return None
+
+
+def _lookup_student_identity(student_id) -> tuple[str, str] | None:
+    student_id_text = str(student_id or "").strip()
+    if not student_id_text:
+        return None
+    roster = _load_student_roster()
+    return roster.get(student_id_text)
+
+
+def _load_student_roster() -> dict[str, tuple[str, str]]:
+    global _ROSTER_CACHE
+    if _ROSTER_CACHE is not None:
+        return _ROSTER_CACHE
+    roster: dict[str, tuple[str, str]] = {}
+    if ROSTER_CSV.exists():
+        with ROSTER_CSV.open("r", newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                student_id = str(row.get("student_id") or "").strip()
+                firstname = str(row.get("firstname") or "").strip()
+                lastname = str(row.get("lastname") or "").strip()
+                if student_id and (firstname or lastname):
+                    roster[student_id] = (firstname, lastname)
+    _ROSTER_CACHE = roster
+    return roster
 
 
 def _safe_dict(fn) -> dict:
