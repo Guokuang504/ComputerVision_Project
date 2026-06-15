@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import shutil
 import time
 from pathlib import Path
@@ -360,14 +361,18 @@ def _process_exam_pages(
 
         zone_results = []
         for zone_index, z in enumerate(numeric_zones):
-            m = service.handwriting.predict_number(
+            m = _recognize_numeric_field(
+                service,
                 np.array(z["mantisse"]),
+                kind="mantisse",
                 debug_name=f"{source_name}_p{page_index}_z{zone_index}_mantisse.png",
             )
             e = None
             if z["exposant"] is not None:
-                e = service.handwriting.predict_number(
+                e = _recognize_numeric_field(
+                    service,
                     np.array(z["exposant"]),
+                    kind="exposant",
                     debug_name=f"{source_name}_p{page_index}_z{zone_index}_exposant.png",
                 )
             u = None
@@ -430,19 +435,53 @@ def _process_exam_pages(
 def _parse_int(value) -> int | None:
     if value is None:
         return None
-    try:
-        return int(str(value).strip())
-    except (ValueError, TypeError):
+    cleaned = str(value).strip()
+    if not cleaned:
         return None
+    try:
+        return int(float(cleaned.replace(",", ".")))
+    except (ValueError, TypeError):
+        match = re.search(r"-?\d+", cleaned)
+        return int(match.group(0)) if match else None
 
 
 def _parse_float(value) -> float | None:
     if value is None:
         return None
+    cleaned = str(value).strip().replace(",", ".")
+    if not cleaned:
+        return None
+    cleaned = re.sub(r"[^0-9.\-]", "", cleaned)
+    if cleaned.count(".") > 1:
+        first = cleaned.find(".")
+        cleaned = cleaned[: first + 1] + cleaned[first + 1 :].replace(".", "")
     try:
-        return float(str(value).strip())
+        return float(cleaned)
     except (ValueError, TypeError):
         return None
+
+
+def _recognize_numeric_field(service: RecognitionService, crop: np.ndarray, kind: str, debug_name: str):
+    """Combine the handwritten digit SVM with Tesseract for large numeric boxes."""
+    handwritten = service.handwriting.predict_number(crop, debug_name=debug_name)
+    if kind == "mantisse":
+        ocr = service.recognize_printed_text(crop, whitelist="0123456789.,-", psm=7)
+        parse = _parse_float
+        min_ocr_confidence = 0.20
+    else:
+        ocr = service.recognize_printed_text(crop, whitelist="0123456789-", psm=8)
+        parse = _parse_int
+        min_ocr_confidence = 0.15
+
+    handwritten_value = parse(handwritten.text)
+    ocr_value = parse(ocr.text)
+    if ocr_value is None:
+        return handwritten
+    if handwritten_value is None:
+        return ocr
+    if ocr.confidence >= min_ocr_confidence and ocr.confidence > handwritten.confidence + 0.05:
+        return ocr
+    return handwritten
 
 
 def _lookup_student_identity(student_id) -> tuple[str, str] | None:

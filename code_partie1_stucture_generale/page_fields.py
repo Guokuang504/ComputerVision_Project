@@ -97,11 +97,24 @@ def find_numeric_zones(image: Image.Image) -> list[dict]:
               EXPOSANT_SIZE["min_h"] <= bh <= EXPOSANT_SIZE["max_h"]):
             exposants.append((x, y, bw, bh))
 
-    # Group: for each mantisse find its exposant (above) and unite (right)
+    # Group: for each mantisse find its exposant (above) and unite (right).
+    # Unit boxes have nearly the same size as mantisse boxes, so they are first
+    # detected as "mantisses". Mark right-hand boxes as units to avoid creating
+    # an extra numeric answer row and shifting all following question numbers.
     mantisses.sort(key=lambda b: b[1])
+    unit_boxes: set[tuple[int, int, int, int]] = set()
+    for mx, my, mw, mh in mantisses:
+        for ux, uy, uw, uh in mantisses:
+            if ux <= mx + mw:
+                continue
+            if abs(uy - my) < 55 and 80 <= (ux - (mx + mw)) <= 520:
+                unit_boxes.add((ux, uy, uw, uh))
+
     zones = []
 
     for mx, my, mw, mh in mantisses:
+        if (mx, my, mw, mh) in unit_boxes:
+            continue
         exp_crop = None
         for ex, ey, ew, eh in exposants:
             if ey < my and (my - ey) < 250 and abs(ex - (mx + mw // 2)) < mw:
@@ -109,8 +122,8 @@ def find_numeric_zones(image: Image.Image) -> list[dict]:
                 break
 
         unite_crop = None
-        for ux, uy, uw, uh in mantisses:
-            if ux > mx + mw and abs(uy - my) < 50:
+        for ux, uy, uw, uh in sorted(unit_boxes, key=lambda b: b[0]):
+            if ux > mx + mw and abs(uy - my) < 55:
                 unite_crop = _safe_crop(image, (ux + 4, uy + 4, ux + uw - 4, uy + uh - 4))
                 break
 
